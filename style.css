@@ -20,14 +20,38 @@ body {
 
 /* header */
 .site-header {
-  text-align: center;
-  padding-top: 50px;
+  display: flex;
+  flex-direction: column; /* stack logo above title */
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 24px;
 }
 
 .site-title {
-  font-size: 22px;
+  font-size: 48px; /* match the logo height for visual parity */
+  line-height: 48px;
   font-weight: 500;
-  margin-bottom: 10px;
+  margin: 0;
+  text-align: center;
+}
+
+/* logo */
+.site-logo {
+  height: 48px;
+  width: auto;
+  display: block;
+}
+
+/* Responsive: scale down header on small screens */
+@media (max-width: 480px) {
+  .site-logo {
+    height: 40px;
+  }
+  .site-title {
+    font-size: 28px;
+    line-height: 32px;
+  }
 }
 
 /* chat window */
@@ -44,6 +68,66 @@ body {
   overflow-y: auto;
   background: #fafafa;
   white-space: pre-line;
+}
+
+/* conversation bubbles */
+.chat-window {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+}
+
+.message .bubble {
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 16px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.message.user {
+  align-self: flex-end;
+}
+
+.message.user .bubble {
+  background: #000;
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+
+.message.assistant {
+  align-self: flex-start;
+}
+
+.message.assistant .bubble {
+  background: #ffffff;
+  border: 1px solid #e6e6e6;
+  color: #222;
+  border-bottom-left-radius: 6px;
+}
+
+.message .timestamp {
+  font-size: 12px;
+  color: #888;
+  margin-top: 6px;
+  align-self: flex-end;
+}
+
+.message.assistant.recommendation .bubble {
+  background: linear-gradient(180deg, #fffdf8, #ffffff);
+  border: 1px solid #fde8d6;
+}
+
+.message.error .bubble {
+  background: #fff6f6;
+  border-color: #f5c2c2;
+  color: #811;
 }
 
 /* messages */
@@ -92,6 +176,21 @@ body {
   justify-content: center;
   cursor: pointer;
   transition: background 0.3s;
+}
+
+/* clear button (sits next to send button) */
+.chat-form .clear-btn {
+  font-size: 14px;
+  background: transparent;
+  color: #000;
+  border: 1px solid #ccc;
+  padding: 10px 12px;
+  height: 48px;
+  cursor: pointer;
+}
+
+.chat-form .clear-btn:hover {
+  background: #f2f2f2;
 }
 
 .chat-form button .material-icons {
