@@ -5,7 +5,7 @@ const chatWindow = document.getElementById("chatWindow");
 const sendBtn = document.getElementById("sendBtn");
 
 // Configuration
-const WORKER_URL = "https://loreal-chatbot-api.riveraja.workers.dev"; // workers.dev endpoint
+const WORKER_URL = "https://loreal-chatbot-api.riveraja.workers.dev/"; // workers.dev endpoint
 const SYSTEM_PROMPT =
   "You are a helpful L'Oréal product assistant. Provide friendly, helpful beauty product recommendations and routines.";
 const STORAGE_KEY = "loreal_chat_history";
