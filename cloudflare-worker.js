@@ -15,6 +15,15 @@ export default {
     }
 
     const apiKey = env.OPENAI_API_KEY; // Make sure to name your secret OPENAI_API_KEY in the Cloudflare Workers dashboard
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Server misconfiguration: OPENAI_API_KEY not set in worker environment",
+        }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
     const apiUrl = "https://api.openai.com/v1/chat/completions";
     const userInput = await request.json();
 
@@ -31,7 +40,8 @@ export default {
     const requestBody = {
       model: "gpt-4o",
       messages: userInput.messages,
-      max_completion_tokens: 300,
+      // OpenAI expects `max_tokens` for completion length limits
+      max_tokens: 300,
     };
 
     let response;
@@ -54,7 +64,31 @@ export default {
       );
     }
 
-    const data = await response.json();
+    // If the upstream responded with a non-OK status, forward the status and body for debugging
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return new Response(
+        JSON.stringify({
+          error: "OpenAI API error",
+          status: response.status,
+          body: text,
+        }),
+        { status: 502, headers: corsHeaders }
+      );
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (err) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid JSON from OpenAI upstream",
+          details: String(err),
+        }),
+        { status: 502, headers: corsHeaders }
+      );
+    }
 
     // Normalize assistant content: try to parse JSON embedded in the assistant message
     try {

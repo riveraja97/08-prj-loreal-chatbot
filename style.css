@@ -70,6 +70,21 @@ body {
   white-space: pre-line;
 }
 
+/* Latest question display (appears above the chat window) */
+.last-question {
+  margin: 12px 0 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border-left: 4px solid #000;
+  color: #222;
+  font-size: 15px;
+  border-radius: 6px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+.last-question[hidden] {
+  display: none;
+}
+
 /* conversation bubbles */
 .chat-window {
   display: flex;

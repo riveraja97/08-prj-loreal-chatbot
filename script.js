@@ -114,19 +114,36 @@ function saveContext() {
   } catch (e) {
     console.warn("Failed to save user context to localStorage", e);
   }
-}
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content) {
+          // Prefer to surface any structured error the worker returned so the user
+          // sees why the request failed without opening DevTools.
+          let errMessage = "Sorry — no response returned from the API.";
+          try {
+            if (data) {
+              if (data.error) {
+                errMessage = typeof data.error === "string" ? data.error : JSON.stringify(data.error);
+              } else if (data.body) {
+                errMessage = `Upstream error: ${String(data.body)}`;
+              }
+            }
+          } catch (e) {
+            /* ignore */
+          }
 
-// Try to extract a user's name from free-form text (very small heuristic)
-function extractNameFromText(text) {
-  if (!text || typeof text !== "string") return null;
-  const patterns = [
-    /\bmy name is ([A-Za-z \-']+)\b/i,
-    /\bi(?:'m| am) ([A-Za-z \-']+)\b/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m && m[1]) {
-      return m[1]
+          // update loading element to show error
+          if (loadingEl) {
+            const bubble = loadingEl.querySelector(".bubble");
+            bubble.textContent = errMessage;
+            loadingEl.classList.add("error");
+          }
+
+          console.warn(
+            "Unexpected API response shape: expected OpenAI Chat Completions JSON. Response received:",
+            data
+          );
+          console.error("Unexpected API response:", data);
+        } else {
         .trim()
         .split(" ")
         .map((s) => s[0].toUpperCase() + s.slice(1))
@@ -172,6 +189,24 @@ function appendMessageToDOM(role, text, isHtml = false, timestampISO = null) {
   return el; // caller can update or replace bubble content if needed
 }
 
+// Show the user's latest question above the chat responses. Passing a falsy
+// value will hide the element.
+function showLastQuestion(text) {
+  const el = document.getElementById("lastQuestion");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  el.textContent = text;
+  el.hidden = false;
+}
+
+function clearLastQuestion() {
+  showLastQuestion(null);
+}
+
 function renderConversation() {
   chatWindow.innerHTML = "";
   if (conversation.length === 0) {
@@ -214,6 +249,13 @@ function tryExtractJSON(text) {
 // but this client-side check avoids unnecessary requests for obviously off-topic queries.
 function isOnTopic(text) {
   if (!text || typeof text !== "string") return false;
+  // Treat name-introduction phrases ("my name is", "I'm ...") as on-topic
+  // so users can introduce themselves without being blocked by the off-topic guard.
+  try {
+    if (extractNameFromText(text)) return true;
+  } catch (e) {
+    /* ignore */
+  }
   const s = text.toLowerCase();
   const keywords = [
     "product",
@@ -283,6 +325,12 @@ if (clearBtn) {
     chatWindow.innerHTML = "👋 Hello! How can I help you today?";
     userInput.value = "";
     userInput.focus();
+    // Clear the latest-question UI
+    try {
+      clearLastQuestion();
+    } catch (e) {
+      /* ignore */
+    }
     updateClearButtonState();
   });
 }
@@ -322,6 +370,13 @@ chatForm.addEventListener("submit", async (e) => {
   conversation.push({ role: "user", content: text, createdAt: userCreatedAt });
   saveConversation();
   appendMessageToDOM("user", text, false, userCreatedAt);
+
+  // Display the latest question in the dedicated UI above the chat window
+  try {
+    showLastQuestion(text);
+  } catch (e) {
+    /* ignore */
+  }
 
   // Update user context: track past questions and detect name introductions
   try {
