@@ -10,36 +10,19 @@ const WORKER_URL = "https://loreal-chatbot-api.riveraja.workers.dev/"; // worker
 const SYSTEM_PROMPT =
   "You are a helpful, friendly L’Oréal product specialist. Answer only questions about L’Oréal products, routines, and product recommendations. If a user asks something outside this scope, politely decline and offer to help with product information or routines instead. Use the provided product dataset when making recommendations. When recommending products, include up to 3 items, a short reason for each, and practical next steps for using them (e.g., order of application in a routine). Ask one brief clarifying question if the user’s request lacks key details (skin type, hair concern, age, desired outcome). Do not give medical diagnoses or clinical advice; if the user asks for medical guidance, recommend they consult a healthcare professional. Keep responses concise, factual, and brand-appropriate.";
 const STORAGE_KEY = "loreal_chat_history";
+const CONTEXT_KEY = "loreal_chat_context";
 const MAX_HISTORY = 20; // keep recent messages to limit token use
-// Optional direct OpenAI calling (development only). Keep false for production and use WORKER_URL.
-const USE_DIRECT_OPENAI = false; // set true to call OpenAI directly from the browser (insecure)
-const DIRECT_OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-
+// Client always uses the Cloudflare Worker. Keep API keys server-side.
 // Informational log: which endpoint the client will call
 (function logClientEndpoint() {
   try {
-    if (USE_DIRECT_OPENAI) {
-      const apiKeyAvailable =
-        typeof OPENAI_API_KEY !== "undefined" ||
-        (typeof secrets !== "undefined" && secrets.OPENAI_API_KEY);
-      console.info(
-        "Chat client configured to call OpenAI directly:",
-        DIRECT_OPENAI_URL
-      );
-      if (!apiKeyAvailable) {
-        console.warn(
-          "Direct OpenAI mode is enabled but no API key was found.\nCreate a local secrets.js with OPENAI_API_KEY or disable USE_DIRECT_OPENAI in script.js before deploying."
-        );
-      }
-    } else {
-      console.info(
-        "Chat client configured to use Cloudflare Worker:",
-        WORKER_URL
-      );
-      console.info(
-        "Ensure the worker forwards the incoming { messages } array to OpenAI and returns the OpenAI JSON (choices[0].message.content)."
-      );
-    }
+    console.info(
+      "Chat client configured to use Cloudflare Worker:",
+      WORKER_URL
+    );
+    console.info(
+      "Ensure the worker forwards the incoming { messages } array to OpenAI and returns the OpenAI JSON (choices[0].message.content)."
+    );
   } catch (e) {
     console.warn("Could not determine client endpoint configuration:", e);
   }
@@ -92,6 +75,7 @@ If you cannot find a good match, return an empty array for "recommendations".`;
 
 // Conversation holds prior user/assistant messages (no system prompt)
 let conversation = [];
+let userContext = { name: null, pastQuestions: [] };
 
 // Initialize UI from localStorage (if present)
 function loadConversation() {
@@ -105,6 +89,51 @@ function loadConversation() {
   } catch (e) {
     console.warn("Failed to load conversation from localStorage", e);
   }
+}
+
+function loadContext() {
+  try {
+    const raw = localStorage.getItem(CONTEXT_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      userContext = parsed;
+      // ensure structure
+      userContext.pastQuestions = Array.isArray(userContext.pastQuestions)
+        ? userContext.pastQuestions.slice(-MAX_HISTORY)
+        : [];
+    }
+  } catch (e) {
+    console.warn("Failed to load user context from localStorage", e);
+  }
+}
+
+function saveContext() {
+  try {
+    localStorage.setItem(CONTEXT_KEY, JSON.stringify(userContext));
+  } catch (e) {
+    console.warn("Failed to save user context to localStorage", e);
+  }
+}
+
+// Try to extract a user's name from free-form text (very small heuristic)
+function extractNameFromText(text) {
+  if (!text || typeof text !== "string") return null;
+  const patterns = [
+    /\bmy name is ([A-Za-z \-']+)\b/i,
+    /\bi(?:'m| am) ([A-Za-z \-']+)\b/i,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m && m[1]) {
+      return m[1]
+        .trim()
+        .split(" ")
+        .map((s) => s[0].toUpperCase() + s.slice(1))
+        .join(" ");
+    }
+  }
+  return null;
 }
 
 function saveConversation() {
@@ -179,6 +208,48 @@ function tryExtractJSON(text) {
   }
 }
 
+// Heuristic: is the user's question about L'Oréal products or routines?
+// This is a simple keyword-based guard so the client can refuse unrelated queries
+// without calling the API. The system prompt already enforces this server-side,
+// but this client-side check avoids unnecessary requests for obviously off-topic queries.
+function isOnTopic(text) {
+  if (!text || typeof text !== "string") return false;
+  const s = text.toLowerCase();
+  const keywords = [
+    "product",
+    "recommend",
+    "recommendation",
+    "routine",
+    "skin",
+    "hair",
+    "makeup",
+    "serum",
+    "moistur",
+    "shampoo",
+    "conditioner",
+    "cleanser",
+    "sunscreen",
+    "spf",
+    "hydrating",
+    "repair",
+    "volume",
+    "mascara",
+    "foundation",
+    "concealer",
+    "hydration",
+    "anti-aging",
+    "brighten",
+    "glow",
+    "oil",
+    "dry",
+    "sensitive",
+    "concern",
+    "order",
+    "apply",
+  ];
+  return keywords.some((k) => s.indexOf(k) !== -1);
+}
+
 // Utility: simple escape for innerHTML insertion
 function escapeHtml(str) {
   return String(str)
@@ -191,6 +262,7 @@ function escapeHtml(str) {
 
 // Load saved messages and render
 loadConversation();
+loadContext();
 renderConversation();
 
 // Manage clear button state
@@ -222,61 +294,104 @@ chatForm.addEventListener("submit", async (e) => {
   const text = userInput.value.trim();
   if (!text) return;
 
+  // Quick client-side refusal for off-topic queries to avoid unnecessary API calls.
+  if (!isOnTopic(text)) {
+    const refusal =
+      "Sorry — I can only answer questions about L’Oréal products, routines, and product recommendations. Please ask about products, routines, skin or hair concerns, or request product recommendations.";
+    const assistantTs = new Date().toISOString();
+    appendMessageToDOM("assistant", refusal, false, assistantTs).classList.add(
+      "refusal"
+    );
+    conversation.push({
+      role: "assistant",
+      content: refusal,
+      createdAt: assistantTs,
+    });
+    saveConversation();
+    userInput.value = "";
+    userInput.focus();
+    return;
+  }
+
   // Disable input & button to prevent duplicates
   userInput.disabled = true;
   sendBtn.disabled = true;
 
-  // Append user's message to conversation and DOM
-  conversation.push({ role: "user", content: text });
+  // Append user's message to conversation and DOM (store timestamp)
+  const userCreatedAt = new Date().toISOString();
+  conversation.push({ role: "user", content: text, createdAt: userCreatedAt });
   saveConversation();
-  appendMessageToDOM("user", text);
+  appendMessageToDOM("user", text, false, userCreatedAt);
+
+  // Update user context: track past questions and detect name introductions
+  try {
+    userContext.pastQuestions = userContext.pastQuestions || [];
+    userContext.pastQuestions.push({
+      question: text,
+      createdAt: userCreatedAt,
+    });
+    if (userContext.pastQuestions.length > MAX_HISTORY) {
+      userContext.pastQuestions = userContext.pastQuestions.slice(-MAX_HISTORY);
+    }
+    const maybeName = extractNameFromText(text);
+    if (maybeName && (!userContext.name || userContext.name !== maybeName)) {
+      userContext.name = maybeName;
+      saveContext();
+      const ackTs = new Date().toISOString();
+      const ack = `Nice to meet you, ${userContext.name}! I'll remember your name.`;
+      appendMessageToDOM("assistant", ack, false, ackTs).classList.add("meta");
+      conversation.push({ role: "assistant", content: ack, createdAt: ackTs });
+      saveConversation();
+    } else {
+      saveContext();
+    }
+  } catch (e) {
+    console.warn("Failed to update user context:", e);
+  }
 
   // Show loading state (assistant)
   const loadingEl = appendMessageToDOM("assistant", "Thinking...");
 
-  // Build messages array: system prompt + conversation history
-  const messagesToSend = [
-    { role: "system", content: SYSTEM_PROMPT },
-    // Instruct assistant to return structured JSON using the small product dataset below
-    { role: "system", content: JSON_INSTRUCTION },
-    ...conversation.map((m) => ({ role: m.role, content: m.content })),
-  ];
-
   try {
-    let res;
-    if (USE_DIRECT_OPENAI) {
-      // Try to find API key either as global OPENAI_API_KEY or in a `secrets` object (secrets.js)
-      const apiKey =
-        typeof OPENAI_API_KEY !== "undefined"
-          ? OPENAI_API_KEY
-          : typeof secrets !== "undefined" && secrets.OPENAI_API_KEY
-          ? secrets.OPENAI_API_KEY
-          : null;
-      if (!apiKey) {
-        throw new Error(
-          "OPENAI_API_KEY not found. To call OpenAI directly, set OPENAI_API_KEY (in secrets.js or global)."
+    // Build messages array to send to the worker / OpenAI.
+    // Filter out UI-only recommendation entries (marked with productId or transient)
+    // so they don't pollute the model context on subsequent requests.
+    const contextPayload = {
+      name: userContext.name || null,
+      pastQuestions: userContext.pastQuestions || [],
+    };
+    const messagesToSend = [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "system",
+        content: `User context: ${JSON.stringify(contextPayload)}`,
+      },
+      { role: "system", content: JSON_INSTRUCTION },
+      ...conversation
+        .slice(-MAX_HISTORY)
+        .filter((m) => !m.productId && !m.transient)
+        .map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    // Provide some diagnostics about filtering
+    try {
+      const filteredOut =
+        conversation.slice(-MAX_HISTORY).length - messagesToSend.length + 2; // +2 for the two system messages
+      if (filteredOut > 0) {
+        console.info(
+          `Filtered out ${filteredOut} UI-only recommendation entries from the messages sent to the model.`
         );
       }
-
-      res = await fetch(DIRECT_OPENAI_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: messagesToSend,
-          max_tokens: 300,
-        }),
-      });
-    } else {
-      res = await fetch(WORKER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: messagesToSend }),
-      });
+    } catch (e) {
+      /* ignore */
     }
+
+    // Always call the Cloudflare Worker (keeps API key server-side)
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: messagesToSend }),
+    });
 
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content;
@@ -292,8 +407,9 @@ chatForm.addEventListener("submit", async (e) => {
       );
       console.error("Unexpected API response:", data);
     } else {
-      // Try to parse JSON recommendations from the assistant response
-      const parsed = tryExtractJSON(content);
+      // Try to parse JSON recommendations from the assistant response. Prefer normalized value from the worker when available.
+      const parsed =
+        data?.choices?.[0]?.message?.parsed ?? tryExtractJSON(content);
       if (parsed && Array.isArray(parsed.recommendations)) {
         // Replace loading with a short assistant heading
         if (loadingEl) {
@@ -316,9 +432,24 @@ chatForm.addEventListener("submit", async (e) => {
           );
         });
 
-        // Save assistant message (raw content) to conversation + persist
-        conversation.push({ role: "assistant", content });
+        // Save assistant message (raw content) to conversation + persist (with timestamp)
+        const assistantCreatedAt = new Date().toISOString();
+        conversation.push({
+          role: "assistant",
+          content,
+          createdAt: assistantCreatedAt,
+        });
         saveConversation();
+        // Update the loading element timestamp to the assistant createdAt
+        if (loadingEl) {
+          const ts = loadingEl.querySelector(".timestamp");
+          if (ts) {
+            const d = new Date(assistantCreatedAt);
+            ts.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(
+              d.getMinutes()
+            ).padStart(2, "0")}`;
+          }
+        }
       } else {
         // Fallback: show assistant free-text reply by updating loading element
         if (loadingEl) {
@@ -326,9 +457,24 @@ chatForm.addEventListener("submit", async (e) => {
           bubble.textContent = content;
         }
 
-        // Save assistant message to conversation + persist
-        conversation.push({ role: "assistant", content });
+        // Save assistant message to conversation + persist (with timestamp)
+        const assistantCreatedAt = new Date().toISOString();
+        conversation.push({
+          role: "assistant",
+          content,
+          createdAt: assistantCreatedAt,
+        });
         saveConversation();
+        // Update the loading element timestamp to the assistant createdAt
+        if (loadingEl) {
+          const ts = loadingEl.querySelector(".timestamp");
+          if (ts) {
+            const d = new Date(assistantCreatedAt);
+            ts.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(
+              d.getMinutes()
+            ).padStart(2, "0")}`;
+          }
+        }
       }
     }
   } catch (err) {
