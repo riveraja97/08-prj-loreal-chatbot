@@ -5,19 +5,13 @@ const chatWindow = document.getElementById("chatWindow");
 const sendBtn = document.getElementById("sendBtn");
 const clearBtn = document.getElementById("clearBtn");
 
-const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev";
-const SYSTEM_PROMPT = "You are a helpful, friendly L’Oréal product specialist.";
+/* Configuration */
+const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev/"; // replace with your deployed worker
 
+/* Conversation */
 let conversation = [];
 
-// Show initial greeting
-function showInitialGreeting() {
-  if (conversation.length === 0) {
-    appendMessage("assistant", "👋 Hi! How can I help you today?");
-  }
-}
-
-// Append a message to chat
+/* Append message */
 function appendMessage(role, text) {
   const el = document.createElement("div");
   el.className = `message ${role}`;
@@ -27,36 +21,52 @@ function appendMessage(role, text) {
   el.appendChild(bubble);
   chatWindow.appendChild(el);
   chatWindow.scrollTop = chatWindow.scrollHeight;
-  return el;
 }
 
-// Load conversation from localStorage
-function loadConversation() {
+/* Clear conversation */
+clearBtn.addEventListener("click", () => {
+  conversation = [];
+  chatWindow.innerHTML = "";
+  appendMessage("assistant", "👋 Hi! How can I help you today?");
+});
+
+/* On load, show greeting */
+appendMessage("assistant", "👋 Hi! How can I help you today?");
+
+/* Handle form submit */
+chatForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = userInput.value.trim();
+  if (!text) return;
+
+  // Show user message
+  appendMessage("user", text);
+  conversation.push({ role: "user", content: text });
+
+  // Disable input while waiting
+  userInput.disabled = true;
+  sendBtn.disabled = true;
+
+  // Call Worker
   try {
-    const raw = localStorage.getItem("loreal_chat_history");
-    if (raw) conversation = JSON.parse(raw);
-  } catch {}
-}
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: conversation }),
+    });
 
-// Save conversation
-function saveConversation() {
-  localStorage.setItem("loreal_chat_history", JSON.stringify(conversation));
-}
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content || "No response";
 
-// Clear conversation
-if (clearBtn) {
-  clearBtn.addEventListener("click", () => {
-    conversation = [];
-    localStorage.removeItem("loreal_chat_history");
-    chatWindow.innerHTML = "";
+    appendMessage("assistant", content);
+    conversation.push({ role: "assistant", content });
+  } catch (err) {
+    appendMessage("assistant", "Error: Could not get response.");
+    console.error(err);
+  } finally {
+    userInput.disabled = false;
+    sendBtn.disabled = false;
     userInput.value = "";
-    showInitialGreeting();
-  });
-}
-
-loadConversation();
-conversation.forEach(m => appendMessage(m.role, m.content));
-showInitialGreeting();
-
-// Send message
-chatForm.addEventListener("submit", async (e)
+    userInput.focus();
+  }
+});
