@@ -21,9 +21,12 @@ export default {
     }
 
     let messages = [];
+    let userContext = { name: null, pastQuestions: [] };
+
     try {
       const body = await request.json();
       messages = body.messages || [];
+      userContext = body.userContext || userContext;
     } catch (err) {
       return new Response(
         JSON.stringify({ error: "Missing or invalid request body" }),
@@ -31,7 +34,7 @@ export default {
       );
     }
 
-    // Sample product dataset
+    // Product dataset
     const PRODUCTS = [
       { id: "p001", name: "HydraBoost Moisturizing Cream", category: "skincare", description: "Rich, hydrating cream for dry to very dry skin.", url: "https://example.com/hydraboost" },
       { id: "p002", name: "Glow Radiance Serum", category: "skincare", description: "Lightweight serum with vitamin C to brighten skin.", url: "https://example.com/glow-serum" },
@@ -39,35 +42,42 @@ export default {
       { id: "p004", name: "Repair & Shine Shampoo", category: "haircare", description: "Strengthening shampoo with argan oil.", url: "https://example.com/repair-shampoo" },
     ];
 
+    const SYSTEM_PROMPT = `
+You are a helpful, friendly L’Oréal product specialist.
+Answer only questions about L’Oréal products, routines, and recommendations.
+If the user asks outside this scope, politely decline.
+Include up to 3 products, a short reason, and next steps.
+Do not give medical advice.
+Keep responses concise and brand-appropriate.
+`;
+
     const JSON_INSTRUCTION = `Available products (JSON): ${JSON.stringify(PRODUCTS)}
-When recommending, choose up to 3 products from the list above that best match the user's request. Return ONLY valid JSON (no surrounding explanation) with this shape:
+Return ONLY valid JSON like:
 {
   "recommendations": [
-    {"id":"p001","name":"HydraBoost Moisturizing Cream","category":"skincare","reason":"Short justification for why this fits"}
+    {"id":"p001","name":"HydraBoost Moisturizing Cream","category":"skincare","reason":"Short justification"}
   ]
 }
-If no good match, return empty array for "recommendations".`;
+Return empty array if no good match.`;
 
     // If no messages, send greeting
     if (!messages.length) {
       return new Response(
         JSON.stringify({
-          choices: [
-            { message: { content: "👋 Hi! How can I help you today?" } },
-          ],
+          choices: [{ message: { content: "👋 Hi! How can I help you today?" } }],
         }),
         { headers: corsHeaders }
       );
     }
 
-    // Add system prompts to messages
+    // Build full messages for OpenAI
     const fullMessages = [
-      { role: "system", content: "You are a helpful, friendly L’Oréal product specialist. Only answer product questions and recommendations." },
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: `User context: ${JSON.stringify(userContext)}` },
       { role: "system", content: JSON_INSTRUCTION },
       ...messages,
     ];
 
-    // Call OpenAI API
     const apiKey = env.OPENAI_API_KEY;
     const apiUrl = "https://api.openai.com/v1/chat/completions";
 
@@ -86,7 +96,6 @@ If no good match, return empty array for "recommendations".`;
       });
 
       const result = await openaiRes.json();
-
       return new Response(JSON.stringify(result), { headers: corsHeaders });
     } catch (err) {
       return new Response(
