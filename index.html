@@ -1,56 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Smart Product Advisor</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="style.css" />
-  </head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat Assistant</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page-wrapper">
+    <header class="site-header">
+      <img src="img/loreal-logo.png" alt="L'Oréal logo" class="site-logo" />
+      <h1 class="site-title">Smart Product Advisor</h1>
+    </header>
 
-  <body>
-    <div class="page-wrapper">
-      <!-- Header -->
-      <header class="site-header">
-        <img src="img/loreal-logo.png" alt="L'Oréal logo" class="site-logo" />
-        <h1 class="site-title">Smart Product Advisor</h1>
-      </header>
+    <main>
+      <section class="chatbox">
+        <!-- Last user question -->
+        <div id="lastQuestion" class="last-question" aria-live="polite" hidden></div>
+        <!-- Chat messages -->
+        <div id="chatWindow" class="chat-window">
+          👋 Hi! How can I help you today?
+        </div>
 
-      <!-- Chat Area -->
-      <main>
-        <section class="chatbox">
-          <div id="chatWindow" class="chat-window"></div>
+        <form id="chatForm" class="chat-form">
+          <label for="userInput" class="visually-hidden">Message</label>
+          <input id="userInput" name="userInput" type="text" placeholder="Ask me about products or routines…" autocomplete="off" required />
+          <button type="submit" id="sendBtn">
+            <span class="material-icons">send</span>
+            <span class="visually-hidden">Send</span>
+          </button>
+          <button type="button" id="clearBtn" class="clear-btn">Clear</button>
+        </form>
+      </section>
+    </main>
 
-          <form id="chatForm" class="chat-form">
-            <label for="userInput" class="visually-hidden">Message</label>
-            <input
-              type="text"
-              id="userInput"
-              name="userInput"
-              placeholder="Ask me about products or routines…"
-              autocomplete="off"
-              required
-            />
-            <button type="submit" id="sendBtn">Send</button>
-            <button type="button" id="clearBtn">Clear</button>
-          </form>
-        </section>
-      </main>
+    <footer class="site-footer">
+      <p>&copy; 2025 L'ORÉAL. All rights reserved.</p>
+      <nav>
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Use</a>
+        <a href="#">Contact</a>
+      </nav>
+    </footer>
+  </div>
 
-      <!-- Footer -->
-      <footer class="site-footer">
-        <p>&copy; 2025 L'ORÉAL. All rights reserved.</p>
-        <nav>
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms of Use</a>
-          <a href="#">Contact</a>
-        </nav>
-      </footer>
-    </div>
-
-    <script src="script.js"></script>
-  </body>
+  <script src="script.js"></script>
+</body>
 </html>
