@@ -60,7 +60,7 @@ export default {
       const resp = await fetch(apiUrl, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(requestBody),
@@ -72,10 +72,13 @@ export default {
         data = JSON.parse(text);
       } catch (e) {
         // upstream returned non-JSON (rare) — forward text for debugging
-        return new Response(JSON.stringify({ error: "Upstream non-JSON", body: text }), {
-          status: resp.status || 502,
-          headers: corsHeaders,
-        });
+        return new Response(
+          JSON.stringify({ error: "Upstream non-JSON", body: text }),
+          {
+            status: resp.status || 502,
+            headers: corsHeaders,
+          }
+        );
       }
 
       if (!resp.ok) {
@@ -86,8 +89,48 @@ export default {
         });
       }
 
-      // Normal: return the OpenAI JSON unchanged to the client
-      return new Response(JSON.stringify(data), { status: 200, headers: corsHeaders });
+      // Try to extract embedded JSON from assistant text and attach it to the
+      // message as `parsed` to make client-side handling simpler.
+      try {
+        const choices = data.choices;
+        if (Array.isArray(choices)) {
+          for (const choice of choices) {
+            const msg = choice.message || (choice.delta ? choice.delta : null);
+            if (msg && typeof msg.content === "string") {
+              // Find first { or [ and last matching bracket, then attempt parse
+              const content = msg.content;
+              const firstIdx = Math.min(
+                ...[content.indexOf("{"), content.indexOf("[")].filter(
+                  (i) => i >= 0
+                )
+              );
+              const lastIdx = Math.max(
+                content.lastIndexOf("}"),
+                content.lastIndexOf("]")
+              );
+              if (firstIdx !== Infinity && lastIdx > firstIdx) {
+                const candidate = content.slice(firstIdx, lastIdx + 1);
+                try {
+                  const parsed = JSON.parse(candidate);
+                  // attach parsed result to the message for the client to use
+                  msg.parsed = parsed;
+                } catch (e) {
+                  // ignore parse errors
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // don't block returning the original data on parsing errors
+        console.warn("Failed to normalize assistant JSON:", e);
+      }
+
+      // Normal: return the (possibly augmented) OpenAI JSON unchanged to the client
+      return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: corsHeaders,
+      });
     } catch (err) {
       return new Response(JSON.stringify({ error: String(err) }), {
         status: 502,
