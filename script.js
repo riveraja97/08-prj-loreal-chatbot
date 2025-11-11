@@ -6,7 +6,7 @@ const sendBtn = document.getElementById("sendBtn");
 const clearBtn = document.getElementById("clearBtn");
 
 /* Configuration */
-const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev/"; // replace with your deployed worker
+const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev/"; // your deployed worker
 
 /* Conversation */
 let conversation = [];
