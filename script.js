@@ -5,9 +5,9 @@ const chatWindow = document.getElementById("chatWindow");
 const sendBtn = document.getElementById("sendBtn");
 const clearBtn = document.getElementById("clearBtn");
 
-const WORKER_URL = "https://your-worker-url.workers.dev"; // replace with your deployed worker
+const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev/"; // your URL
 
-/* Product dataset (for rendering links) */
+/* Product dataset for links */
 const PRODUCTS = [
   { id: "p001", name: "HydraBoost Moisturizing Cream", url: "https://example.com/hydraboost" },
   { id: "p002", name: "Glow Radiance Serum", url: "https://example.com/glow-serum" },
@@ -15,8 +15,9 @@ const PRODUCTS = [
   { id: "p004", name: "Repair & Shine Shampoo", url: "https://example.com/repair-shampoo" },
 ];
 
-/* Conversation */
+/* Conversation and user context */
 let conversation = [];
+let userContext = { name: null, pastQuestions: [] };
 
 /* Append message */
 function appendMessage(role, text, isHtml = false) {
@@ -31,9 +32,10 @@ function appendMessage(role, text, isHtml = false) {
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-/* Clear button */
+/* Clear chat */
 clearBtn.addEventListener("click", () => {
   conversation = [];
+  userContext = { name: null, pastQuestions: [] };
   chatWindow.innerHTML = "";
   appendMessage("assistant", "👋 Hi! How can I help you today?");
 });
@@ -49,6 +51,7 @@ chatForm.addEventListener("submit", async (e) => {
 
   appendMessage("user", text);
   conversation.push({ role: "user", content: text });
+  userContext.pastQuestions.push(text);
 
   userInput.disabled = true;
   sendBtn.disabled = true;
@@ -57,13 +60,12 @@ chatForm.addEventListener("submit", async (e) => {
     const res = await fetch(WORKER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: conversation }),
+      body: JSON.stringify({ messages: conversation, userContext }),
     });
 
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content || "No response";
 
-    // Try to parse JSON recommendations
     let parsed = null;
     try { parsed = JSON.parse(content); } catch {}
 
@@ -79,6 +81,10 @@ chatForm.addEventListener("submit", async (e) => {
     }
 
     conversation.push({ role: "assistant", content });
+
+    // Update user name if assistant mentions it
+    const nameMatch = content.match(/Nice to meet you, (\w+)!/);
+    if (nameMatch) userContext.name = nameMatch[1];
 
   } catch (err) {
     appendMessage("assistant", "Error: Could not get response.");
