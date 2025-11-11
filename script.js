@@ -121,6 +121,3 @@ chatForm.addEventListener("submit", async (e) => {
     userInput.focus();
   }
 });
-
-// Initial greeting
-appendMessage("assistant", "👋 Hi! How can I help you today?");
