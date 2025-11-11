@@ -1,47 +1,53 @@
 // Hardened Cloudflare Worker
 export default {
   async fetch(request, env) {
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Content-Type": "application/json",
-    };
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders });
-    }
-
+    // Only allow POST requests
     if (request.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed. Use POST." }), { headers: corsHeaders });
+      return new Response(
+        JSON.stringify({ error: "Method not allowed. Use POST." }),
+        { status: 405, headers: { "Content-Type": "application/json" } }
+      );
     }
 
-    let messages;
+    let body;
     try {
-      const body = await request.json();
-      messages = body.messages || [];
-      if (!Array.isArray(messages)) throw new Error();
+      body = await request.json();
     } catch {
-      return new Response(JSON.stringify({ error: "Missing or invalid request body" }), { headers: corsHeaders });
+      return new Response(
+        JSON.stringify({ error: "Missing request body" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
-    const apiKey = env.OPENAI_API_KEY;
-    if (!apiKey) return new Response(JSON.stringify({ error: "OpenAI API key not set" }), { headers: corsHeaders });
+    const { messages } = body;
+    if (!messages || !Array.isArray(messages)) {
+      return new Response(
+        JSON.stringify({ error: "Missing messages array" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages,
-        max_tokens: 300,
-      }),
-    });
+    try {
+      const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages,
+          max_tokens: 300
+        })
+      });
 
-    const result = await openaiRes.json();
-    return new Response(JSON.stringify(result), { headers: corsHeaders });
-  },
+      const data = await openaiRes.json();
+      return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
+    } catch (err) {
+      return new Response(
+        JSON.stringify({ error: "OpenAI request failed", details: err.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
 };
