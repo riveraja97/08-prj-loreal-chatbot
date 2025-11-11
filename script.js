@@ -2,59 +2,48 @@
 const chatForm = document.getElementById("chatForm");
 const userInput = document.getElementById("userInput");
 const chatWindow = document.getElementById("chatWindow");
-const sendBtn = document.getElementById("sendBtn");
-const clearBtn = document.getElementById("clearBtn");
 const lastQuestionEl = document.getElementById("lastQuestion");
 
-const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev"; // Replace with your worker URL
+const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev"; 
 let conversation = [];
 
-// Sample product dataset
+// Sample products
 const PRODUCTS = [
-  { id: "p001", name: "Hydra Genius Moisturizing Cream", category: "skincare", description: "72HR Intense Hydration", url: "https://www.lorealparisusa.com/skin-care/facial-moisturizers/hydra-genius-daily-liquid-care-normal-dry-skin" },
-  { id: "p002", name: "Glycolic Bright Serum", category: "skincare", description: "Reduces spots and dark marks", url: "https://www.lorealparis.com.my/glycolic-bright/glycolic-bright-8-face-serum-for-dark-spot-brightening-30ml" },
-  { id: "p003", name: "Waterproof Mascara", category: "makeup", description: "Instant 20X volume & 2X length", url: "https://www.lorealparis.com.my/lash-paradise/instant-volume-waterproof-mascara" },
-  { id: "p004", name: "Total Repair 5 Shampoo", category: "haircare", description: "Repairs 5 common hair problems", url: "https://www.lorealparis.com.my/elseve/total-repair-5/elseve-total-repair-5-shampoo-620ml" }
+  { id: "p001", name: "Hydra Genius Moisturizing Cream", category: "skincare", description: "72HR Intense and Continuous Hydration.", url: "https://www.lorealparisusa.com/skin-care/facial-moisturizers/hydra-genius-daily-liquid-care-normal-dry-skin" },
+  { id: "p002", name: "Glycolic Bright Serum", category: "skincare", description: "Reduces spots, sun spots, age spots and acne marks.", url: "https://www.lorealparis.com.my/glycolic-bright/glycolic-bright-8-face-serum-for-dark-spot-brightening-30ml" },
+  { id: "p003", name: "Waterproof Mascara", category: "makeup", description: "Instant breathtaking 20X more volume & 2X more length.", url: "https://www.lorealparis.com.my/lash-paradise/instant-volume-waterproof-mascara" },
+  { id: "p004", name: "Total Repair 5 Shampoo", category: "haircare", description: "Addresses 5 common signs of damaged hair.", url: "https://www.lorealparis.com.my/elseve/total-repair-5/elseve-total-repair-5-shampoo-620ml" }
 ];
 
-// Initial greeting
-appendMessage("assistant", "👋 Hi! How can I help you today?");
+// Initial message
+chatWindow.textContent = "👋 Hi! How can I help you today?";
 
-// Append message helper
+// Append message to chat
 function appendMessage(role, text, isHtml = false, extraClass = "") {
   const el = document.createElement("div");
   el.className = `message ${role} ${extraClass}`;
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.innerHTML = isHtml ? text : text;
+  if (isHtml) bubble.innerHTML = text;
+  else bubble.textContent = text;
   el.appendChild(bubble);
   chatWindow.appendChild(el);
   chatWindow.scrollTop = chatWindow.scrollHeight;
-  return el;
 }
 
-// Show last question
+// Show last question above chat
 function showLastQuestion(text) {
+  if (!lastQuestionEl) return;
   if (!text) {
     lastQuestionEl.hidden = true;
     lastQuestionEl.textContent = "";
   } else {
-    lastQuestionEl.hidden = false;
     lastQuestionEl.textContent = text;
+    lastQuestionEl.hidden = false;
   }
 }
 
-// Clear conversation
-clearBtn.addEventListener("click", () => {
-  conversation = [];
-  chatWindow.innerHTML = "";
-  showLastQuestion(null);
-  appendMessage("assistant", "👋 Hi! How can I help you today?");
-  userInput.value = "";
-  userInput.focus();
-});
-
-// Try to extract JSON recommendations
+// Try to extract JSON from assistant response
 function tryExtractJSON(text) {
   if (!text) return null;
   const first = text.indexOf("{");
@@ -67,20 +56,29 @@ function tryExtractJSON(text) {
   }
 }
 
-// Submit handler
+// Handle form submit
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = userInput.value.trim();
   if (!text) return;
 
+  // Add user message to conversation & DOM
   conversation.push({ role: "user", content: text });
   appendMessage("user", text);
   showLastQuestion(text);
 
+  // Disable input while waiting for response
   userInput.disabled = true;
-  sendBtn.disabled = true;
 
-  const loadingEl = appendMessage("assistant", "Thinking...");
+  // Show "thinking..." bubble
+  const loadingEl = document.createElement("div");
+  loadingEl.className = "message assistant";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = "Thinking...";
+  loadingEl.appendChild(bubble);
+  chatWindow.appendChild(loadingEl);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
 
   try {
     const res = await fetch(WORKER_URL, {
@@ -91,26 +89,25 @@ chatForm.addEventListener("submit", async (e) => {
 
     const data = await res.json();
     const reply = data?.choices?.[0]?.message?.content || "Sorry, no response.";
-    loadingEl.querySelector(".bubble").textContent = reply;
+    bubble.textContent = reply;
 
-    // Parse product recommendations
+    // Parse product recommendations from JSON
     const parsed = tryExtractJSON(reply);
     if (parsed?.recommendations?.length > 0) {
       parsed.recommendations.forEach((rec) => {
-        const product = PRODUCTS.find(p => p.id === rec.id) || rec;
-        const html = `<strong><a href="${product.url}" target="_blank" rel="noopener">${product.name}</a></strong><div class="rec-reason">${rec.reason || product.description}</div>`;
+        const product = PRODUCTS.find((p) => p.id === rec.id) || rec;
+        const html = `<strong><a href="${product.url}" target="_blank" rel="noopener">${product.name}</a></strong><div class="rec-reason">${rec.reason || ""}</div>`;
         appendMessage("assistant", html, true, "recommendation");
       });
     }
 
     conversation.push({ role: "assistant", content: reply });
   } catch (err) {
-    loadingEl.querySelector(".bubble").textContent = "Error fetching response.";
-    loadingEl.classList.add("error");
+    bubble.textContent = "Error fetching response.";
+    bubble.parentElement.classList.add("error");
     console.error(err);
   } finally {
     userInput.disabled = false;
-    sendBtn.disabled = false;
     userInput.value = "";
     userInput.focus();
   }
