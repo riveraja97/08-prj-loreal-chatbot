@@ -11,10 +11,10 @@ let conversation = [];
 
 // Sample product dataset
 const PRODUCTS = [
-  { id: "p001", name: "HydraBoost Moisturizing Cream", category: "skincare", description: "Rich, hydrating cream for dry to very dry skin.", url: "https://example.com/hydraboost" },
-  { id: "p002", name: "Glow Radiance Serum", category: "skincare", description: "Lightweight serum with vitamin C to brighten and even skin tone.", url: "https://example.com/glow-serum" },
-  { id: "p003", name: "Volume Lift Mascara", category: "makeup", description: "Buildable formula for dramatic volume without clumping.", url: "https://example.com/volume-mascara" },
-  { id: "p004", name: "Repair & Shine Shampoo", category: "haircare", description: "Strengthening shampoo for damaged hair with argan oil.", url: "https://example.com/repair-shampoo" }
+  { id: "p001", name: "Hydra Genius Moisturizing Cream", category: "skincare", description: "72HR Intense and Continuous Hydration. Lightweight Liquid Care Formula. Glowing, Fresh, Healthy-Looking Skin.", url: "https://www.lorealparisusa.com/skin-care/facial-moisturizers/hydra-genius-daily-liquid-care-normal-dry-skin" },
+  { id: "p002", name: "Glycolic Bright Serum", category: "skincare", description: "Clinically proven to visibly reduces 77% of spots, sun spots, age spots and acne marks. Powered by MELASYL™", url: "https://www.lorealparis.com.my/glycolic-bright/glycolic-bright-8-face-serum-for-dark-spot-brightening-30ml" },
+  { id: "p003", name: "Waterproof Mascara", category: "makeup", description: "It gives your lashes instant breathtaking 20X more volume & 2X more length. It lasts up to 36 hours.", url: "https://www.lorealparis.com.my/lash-paradise/instant-volume-waterproof-mascara" },
+  { id: "p004", name: "Total Repair 5 Shampoo", category: "haircare", description: "5 Problems, 1 Solution! Formulated for Asian Hair Total Repair 5 addresses the 5 most common signs of Damaged Hair: Breakage, Dryness, Dullness, Coarseness and Splits ends.", url: "https://www.lorealparis.com.my/elseve/total-repair-5/elseve-total-repair-5-shampoo-620ml" }
 ];
 
 // Append message bubble
