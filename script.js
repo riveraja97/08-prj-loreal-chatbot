@@ -5,7 +5,7 @@ const chatWindow = document.getElementById("chatWindow");
 const sendBtn = document.getElementById("sendBtn");
 const clearBtn = document.getElementById("clearBtn");
 
-const WORKER_URL = "https://YOUR_WORKER_URL_HERE"; // replace with your worker
+const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev"; // replace with your worker
 const MAX_HISTORY = 20;
 
 let conversation = [];
