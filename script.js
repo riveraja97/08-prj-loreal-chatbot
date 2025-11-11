@@ -3,8 +3,10 @@ const chatForm = document.getElementById("chatForm");
 const userInput = document.getElementById("userInput");
 const chatWindow = document.getElementById("chatWindow");
 const lastQuestionEl = document.getElementById("lastQuestion");
+const clearBtn = document.getElementById("clearBtn");
 
 const WORKER_URL = "https://loreal-chatbot.riveraja.workers.dev"; 
+const STORAGE_KEY = "loreal_chat_history";
 let conversation = [];
 
 // Sample products
@@ -14,9 +16,6 @@ const PRODUCTS = [
   { id: "p003", name: "Waterproof Mascara", category: "makeup", description: "Instant breathtaking 20X more volume & 2X more length.", url: "https://www.lorealparis.com.my/lash-paradise/instant-volume-waterproof-mascara" },
   { id: "p004", name: "Total Repair 5 Shampoo", category: "haircare", description: "Addresses 5 common signs of damaged hair.", url: "https://www.lorealparis.com.my/elseve/total-repair-5/elseve-total-repair-5-shampoo-620ml" }
 ];
-
-// Initial message
-chatWindow.textContent = "👋 Hi! How can I help you today?";
 
 // Append message to chat
 function appendMessage(role, text, isHtml = false, extraClass = "") {
@@ -43,6 +42,47 @@ function showLastQuestion(text) {
   }
 }
 
+// Save conversation to localStorage
+function saveConversation() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversation));
+  } catch (e) {
+    console.warn("Failed to save chat history:", e);
+  }
+}
+
+// Load conversation from localStorage
+function loadConversation() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      conversation = JSON.parse(saved);
+      conversation.forEach((m) => appendMessage(m.role, m.content, false, m.extraClass || ""));
+      if (conversation.length) {
+        const lastUser = [...conversation].reverse().find((m) => m.role === "user");
+        if (lastUser) showLastQuestion(lastUser.content);
+      }
+    } else {
+      chatWindow.textContent = "👋 Hi! How can I help you today?";
+    }
+  } catch (e) {
+    console.warn("Failed to load chat history:", e);
+    chatWindow.textContent = "👋 Hi! How can I help you today?";
+  }
+}
+
+// Clear conversation handler
+if (clearBtn) {
+  clearBtn.addEventListener("click", () => {
+    conversation = [];
+    chatWindow.innerHTML = "👋 Hi! How can I help you today?";
+    showLastQuestion(null);
+    localStorage.removeItem(STORAGE_KEY);
+    userInput.value = "";
+    userInput.focus();
+  });
+}
+
 // Try to extract JSON from assistant response
 function tryExtractJSON(text) {
   if (!text) return null;
@@ -62,15 +102,14 @@ chatForm.addEventListener("submit", async (e) => {
   const text = userInput.value.trim();
   if (!text) return;
 
-  // Add user message to conversation & DOM
+  // Add user message
   conversation.push({ role: "user", content: text });
   appendMessage("user", text);
   showLastQuestion(text);
+  saveConversation();
 
   // Disable input while waiting for response
   userInput.disabled = true;
-
-  // Show "thinking..." bubble
   const loadingEl = document.createElement("div");
   loadingEl.className = "message assistant";
   const bubble = document.createElement("div");
@@ -102,6 +141,7 @@ chatForm.addEventListener("submit", async (e) => {
     }
 
     conversation.push({ role: "assistant", content: reply });
+    saveConversation();
   } catch (err) {
     bubble.textContent = "Error fetching response.";
     bubble.parentElement.classList.add("error");
@@ -112,3 +152,6 @@ chatForm.addEventListener("submit", async (e) => {
     userInput.focus();
   }
 });
+
+// Load chat history on page load
+loadConversation();
